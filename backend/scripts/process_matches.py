@@ -1,5 +1,9 @@
+import ssl
+import certifi
 import sys
 import os
+
+ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -15,29 +19,27 @@ def pipeline_processor():
     ai_engine = AIEngineService()
 
     print("Checking database for unprocessed raw job listings...")
-    # Fetch job listings where embedding vectors have not yet been evaluated
     raw_jobs = supabase.table("jobs").select("*").is_("embedding", "null").limit(5).execute()
 
     if not raw_jobs.data:
         print("No new jobs to process.")
         return
 
-    # Grab active resume to apply evaluation mappings against (Selects first active record)
     resume_query = supabase.table("resumes").select("*").limit(1).execute()
     if not resume_query.data:
         print("CRITICAL: Pipeline halted. Please upload at least one target baseline resume first.")
         return
-    
+
     active_resume = resume_query.data[0]
     resume_embedding = active_resume.get("embedding")
 
     for job in raw_jobs.data:
         try:
             print(f"Analyzing listing: {job['title']} at {job['company']}...")
-            
+
             # Step 1: Structural Extraction via Gemini Flash
             analysis = ai_engine.analyze_job_description(job['description'])
-            
+
             # Step 2: Generate Context Vector Embedding via Gemini Embedding Engine
             job_vector = ai_engine.generate_text_embedding(job['description'])
 
@@ -50,40 +52,36 @@ def pipeline_processor():
                 "currency": analysis.currency
             }).eq("id", job["id"]).execute()
 
-            # Step 4: Run mathematical similarity matching via Supabase RPC calculations
+            # Step 4: Run mathematical similarity matching via Supabase RPC
             if resume_embedding:
-                # Call stored procedure matching engine
                 match_rpc = supabase.rpc("match_jobs_to_resume", {
                     "query_embedding": resume_embedding,
-                    "match_threshold": 0.3, # Filters extreme anomalies
+                    "match_threshold": 0.3,
                     "match_count": 1
                 }).execute()
 
                 if match_rpc.data:
                     similarity_score = match_rpc.data[0]["similarity"]
-                    
-                    # Convert to aggregate standard 100 percentage layout bounds
                     final_score = round(similarity_score * 100, 2)
-                    
-                    # Route statuses dynamically depending on target matching boundaries
+
                     status_route = "pending"
                     if final_score >= 95:
-                        status_route = "approved" # Pipeline flag auto-apply loop criteria
+                        status_route = "approved"
                     elif final_score < 85:
                         status_route = "ignored"
 
+                    # Use match_score (actual column name in job_matches table)
                     supabase.table("job_matches").insert({
                         "job_id": job["id"],
                         "resume_id": active_resume["id"],
-                        "semantic_score": final_score,
-                        "aggregate_score": final_score, # We will enhance this with extra heuristics in subsequent phases
+                        "match_score": final_score,
                         "status": status_route
                     }).execute()
-                    
-                    print(f"--> Match processing complete. Calculated Score: {final_score}% -> Route: {status_route}")
+
+                    print(f"--> Match processing complete. Score: {final_score}% -> Route: {status_route}")
 
         except Exception as e:
-            print(f"Error processing matching cycle pipeline run on job {job['id']}: {e}")
+            print(f"Error processing job {job['id']}: {e}")
             continue
 
 if __name__ == "__main__":
