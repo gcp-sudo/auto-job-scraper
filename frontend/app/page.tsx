@@ -5,7 +5,7 @@ import { supabase } from "@/utils/supabase";
 
 interface JobMatch {
   id: string;
-  aggregate_score: number;
+  match_score: number;
   status: string;
   job_id: {
     title: string;
@@ -26,7 +26,7 @@ export default function Dashboard() {
         .from("job_matches")
         .select(`
           id,
-          aggregate_score,
+          match_score,
           status,
           job_id (
             title,
@@ -36,7 +36,7 @@ export default function Dashboard() {
             is_remote
           )
         `)
-        .order("aggregate_score", { ascending: false });
+        .order("match_score", { ascending: false });
 
       if (error) {
         console.error("Error fetching dashboard payload:", JSON.stringify(error));
@@ -66,7 +66,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-8 text-gray-900">
       <div className="mx-auto max-w-6xl">
-        {/* Header Summary */}
         <header className="mb-8 flex items-center justify-between border-b border-gray-200 pb-5">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">CareerAutomation-OS</h1>
@@ -78,7 +77,6 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Matches Grid Layout */}
         {matches.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 p-12 text-center bg-white">
             <p className="text-gray-500 font-medium">No processed jobs identified. Run your backend pipelines to see metrics.</p>
@@ -109,14 +107,12 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Score badge & Call-to-Action */}
                 <div className="flex items-center gap-6">
-                  <div className={`flex flex-col items-center justify-center h-16 w-16 rounded-xl border font-bold ${getScoreColor(match.aggregate_score)}`}>
-                    <span className="text-xl">{Math.round(match.aggregate_score)}</span>
+                  <div className={`flex flex-col items-center justify-center h-16 w-16 rounded-xl border font-bold ${getScoreColor(match.match_score)}`}>
+                    <span className="text-xl">{Math.round(match.match_score)}</span>
                     <span className="text-[10px] uppercase opacity-75 tracking-wider">Match</span>
                   </div>
-
-                  <a
+                  
                     href={match.job_id?.url}
                     target="_blank"
                     rel="noreferrer"
