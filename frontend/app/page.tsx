@@ -112,7 +112,7 @@ export default function Dashboard() {
                     <span className="text-xl">{Math.round(match.match_score)}</span>
                     <span className="text-[10px] uppercase opacity-75 tracking-wider">Match</span>
                   </div>
-                  
+                  <a
                     href={match.job_id?.url}
                     target="_blank"
                     rel="noreferrer"
